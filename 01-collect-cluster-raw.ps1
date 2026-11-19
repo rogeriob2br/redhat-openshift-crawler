@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     OpenShift Application Discovery & Assessment Collector (Windows / PowerShell)
 .DESCRIPTION
@@ -23,6 +23,10 @@ function Resolve-OcBinary {
     param([string]$ExplicitPath)
 
     if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
+        $ExplicitPath = $ExplicitPath.Trim().Trim('"')
+        if (Test-Path -LiteralPath $ExplicitPath -PathType Container) {
+            $ExplicitPath = Join-Path $ExplicitPath "oc.exe"
+        }
         if (Test-Path -LiteralPath $ExplicitPath -PathType Leaf) {
             return (Resolve-Path -LiteralPath $ExplicitPath).Path
         }
@@ -37,8 +41,8 @@ function Resolve-OcBinary {
 
     $candidates = @(
         (Join-Path $PSScriptRoot "oc.exe"),
-        (Join-Path (Get-Location) "oc.exe"),
-        (Join-Path (Get-Location) "oc\oc.exe"),
+        (Join-Path (Get-Location).Path "oc.exe"),
+        (Join-Path (Get-Location).Path "oc\oc.exe"),
         (Join-Path $env:USERPROFILE "Downloads\oc.exe"),
         (Join-Path $env:USERPROFILE "Downloads\oc\oc.exe"),
         "C:\oc\oc.exe",
@@ -52,8 +56,11 @@ function Resolve-OcBinary {
     }
 
     Write-Host "AVISO: 'oc.exe' não foi encontrado no PATH nem nos locais padrão." -ForegroundColor Yellow
-    $inputPath = Read-Host "Informe o caminho completo para o oc.exe (ex: C:\tools\oc.exe)"
+    $inputPath = Read-Host "Informe o caminho para o oc.exe ou para a pasta dele (ex: C:\tools\oc.exe)"
     $inputPath = $inputPath.Trim().Trim('"')
+    if (-not [string]::IsNullOrWhiteSpace($inputPath) -and (Test-Path -LiteralPath $inputPath -PathType Container)) {
+        $inputPath = Join-Path $inputPath "oc.exe"
+    }
 
     if ([string]::IsNullOrWhiteSpace($inputPath) -or -not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
         Write-Host "ERRO: Caminho inválido para oc.exe: '$inputPath'" -ForegroundColor Red
@@ -77,7 +84,9 @@ $ApiServer = (& $OcExe whoami --show-server 2>$null | Out-String).Trim()
 if ([string]::IsNullOrWhiteSpace($ApiServer)) { $ApiServer = "unknown" }
 
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$OutDir = Join-Path "output" "assessment-$Timestamp"
+$BaseDir = (Get-Location).Path
+$OutputRoot = Join-Path $BaseDir "output"
+$OutDir = Join-Path $OutputRoot "assessment-$Timestamp"
 $RawDir = Join-Path $OutDir "raw"
 New-Item -ItemType Directory -Path $RawDir -Force | Out-Null
 
@@ -245,7 +254,7 @@ Collect-Resource "applications.argoproj.io" "argocd_applications" "all"
 
 Write-Host ""
 Write-Host "=== 6. Compactação dos dados ==="
-$ArchiveFile = Join-Path "output" "assessment-$Timestamp.zip"
+$ArchiveFile = Join-Path $OutputRoot "assessment-$Timestamp.zip"
 if (Test-Path -LiteralPath $ArchiveFile) {
     Remove-Item -LiteralPath $ArchiveFile -Force
 }
